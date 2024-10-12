@@ -93,6 +93,9 @@ public class NetworkTraffic extends TextView {
     private final int mTextSizeMulti;
     private final Handler mTrafficHandler;
     private final SettingsObserver mObserver;
+    private final ConnectivityManager.NetworkCallback mNetworkCallback;
+    private final ConnectivityManager.NetworkCallback mDefaultNetworkCallback;
+    private final ConnectivityManager mConnectivityManager;
 
     private int mMode = MODE_DISABLED;
     private int mPosition = POSITION_CENTER;
@@ -305,12 +308,7 @@ public class NetworkTraffic extends TextView {
         mObserver = new SettingsObserver(mTrafficHandler);
 
         // Network tracking related variables
-        final NetworkRequest request = new NetworkRequest.Builder()
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
-                .build();
-        ConnectivityManager.NetworkCallback networkCallback =
-                new ConnectivityManager.NetworkCallback() {
+        mNetworkCallback = new ConnectivityManager.NetworkCallback() {
                     @Override
                     public void onLinkPropertiesChanged(Network network,
                             LinkProperties linkProperties) {
@@ -328,8 +326,7 @@ public class NetworkTraffic extends TextView {
                         mTrafficHandler.sendMessage(msg);
                     }
                 };
-        ConnectivityManager.NetworkCallback defaultNetworkCallback =
-                new ConnectivityManager.NetworkCallback() {
+        mDefaultNetworkCallback = new ConnectivityManager.NetworkCallback() {
             @Override
             public void onAvailable(Network network) {
                 updateViewState();
@@ -340,10 +337,7 @@ public class NetworkTraffic extends TextView {
                 updateViewState();
             }
         };
-        context.getSystemService(ConnectivityManager.class)
-                .registerNetworkCallback(request, networkCallback);
-        context.getSystemService(ConnectivityManager.class)
-                .registerDefaultNetworkCallback(defaultNetworkCallback);
+        mConnectivityManager = context.getSystemService(ConnectivityManager.class);
     }
 
     public void setViewPosition(int vpos) {
@@ -380,6 +374,14 @@ public class NetworkTraffic extends TextView {
         manager.addDarkReceiver(mDarkReceiver);
         manager.addVisibilityReceiver(mVisibilityReceiver);
 
+        final NetworkRequest request = new NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                .build();
+
+        mConnectivityManager.registerNetworkCallback(request, mNetworkCallback);
+        mConnectivityManager.registerDefaultNetworkCallback(mDefaultNetworkCallback);
+
         mObserver.observe();
         updateSettings();
     }
@@ -388,6 +390,8 @@ public class NetworkTraffic extends TextView {
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         mObserver.unobserve();
+        mConnectivityManager.unregisterNetworkCallback(mNetworkCallback);
+        mConnectivityManager.unregisterNetworkCallback(mDefaultNetworkCallback);
     }
 
     class SettingsObserver extends ContentObserver {
